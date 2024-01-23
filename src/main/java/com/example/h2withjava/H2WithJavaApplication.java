@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.sql.*;
 
+@SuppressWarnings("SqlResolve")
 @SpringBootApplication
 public class H2WithJavaApplication {
     private static String JDBC_DRIVER = "org.h2.Driver";
@@ -18,224 +19,144 @@ public class H2WithJavaApplication {
     public static void main(String[] args) {
         SpringApplication.run(H2WithJavaApplication.class, args);
 
-        //Step 1:  Set up the driver
-        try {
-            Class.forName(JDBC_DRIVER);
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        }
+        // In older versions of JDBC, before obtaining a connection, we first had to
+        // initialize the JDBC driver by calling the Class.forName method.
+        // As of JDBC 4.0, all drivers that are found in the classpath are automatically loaded.
+//        Step 1:  Set up the driver
+//        try {
+//            Class.forName(JDBC_DRIVER);
+//        } catch (ClassNotFoundException e) {
+//            throw new RuntimeException(e);
+//        }
 
         createRegistrationTable();
-
         addDataToRegistrationTable();
-
         retrieveDataFromRegistrationTable();
-
         updateAndRetrieveDataFromRegistration();
-
         retrieveDataFromEmployees();
-
         retrieveDataFromEmployeesWithTableJoin();
+        demoLittleBillyTables();
+    }
+
+    private static void demoLittleBillyTables() {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+             Statement stmt = conn.createStatement()) {
+            System.out.println("\nLittle Billy Tables:");
+
+//            String name = "Bill";
+
+            // SQL injection attack - Note SQL statement to handle trailing single-quote
+            String name = "Bill'; drop table REGISTRATION; set @tmp='gotcha";
+
+//            String sql = "select * from REGISTRATION where first='%s'".formatted(name);
+//            try (ResultSet rs = stmt.executeQuery(sql)) {
+//                printResultSet(rs);
+//            }
+
+            String psSql = "select * from REGISTRATION where first=?";
+            try (PreparedStatement ps = conn.prepareStatement(psSql)) {
+                ps.setString(1, name);
+                ResultSet rs = ps.executeQuery();
+                printResultSet(rs);
+            } catch (SQLException ex) {
+                System.err.println("There was a problem running the prepared statement.");
+                ex.printStackTrace();
+            }
+
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+
+
+
     }
 
     private static void createRegistrationTable() {
-        try {
-            //Step 2:  Open a connection to the database
-            conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+             Statement stmt = conn.createStatement()) {
 
-            //Step 3 Prepare a SQL query
-            stmt = conn.createStatement();
-            String sql = "CREATE TABLE   REGISTRATION " +
-                    "(id INTEGER AUTO_INCREMENT  PRIMARY KEY, " +
-                    " first VARCHAR(255), " +
-                    " last VARCHAR(255), " +
-                    " age INTEGER)";
+            String sql = """
+                    CREATE TABLE REGISTRATION
+                    (id INTEGER AUTO_INCREMENT PRIMARY KEY,
+                    first VARCHAR(255),
+                    last VARCHAR(255),
+                    age INTEGER);""";
 
-            //Step 4:  Execute the SQL statement
             stmt.executeUpdate(sql);
 
-            // STEP 6 and 7: Clean-up environment
-
-            //Step 5:  Handle the response.  We don't have to do this for a CREATE statement
-
-            //Steps 6 and 7:  Close open things
-            stmt.close();
-            conn.close();
-        } catch (
-                SQLException ex) {
+        } catch (SQLException ex) {
             throw new RuntimeException(ex);
-        } catch (Exception e) {
-            //Handle errors for Class.forName
-            e.printStackTrace();
-        } finally {
-            //finally block used to close resources
-            try {
-                if (stmt != null) stmt.close();
-            } catch (SQLException se2) {
-            } // nothing we can do
-            try {
-                if (conn != null) conn.close();
-            } catch (SQLException se) {
-                se.printStackTrace();
-            }
         }
     }
 
         public static void addDataToRegistrationTable()  {
-            try {
-                //Step 2:  Open a connection to the database
-                conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+            try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+                 Statement stmt = conn.createStatement()) {
 
-                //Step 3 Prepare a SQL query
-                stmt = conn.createStatement();
-                String sql = "insert into REGISTRATION(first, last, age)  VALUES" +
-                        "('Bill', 'Fairfield', 71)";
+                String sql = "INSERT INTO REGISTRATION (first, last, age) VALUES ('Bill', 'Fairfield', 71)";
 
-                //Step 4:  Execute the SQL statement
                 stmt.executeUpdate(sql);
 
-                // STEP 6 and 7: Clean-up environment
-
-                //Step 5:  Handle the response.  We don't have to do this for a CREATE statement
-
-                //Steps 6 and 7:  Close open things
-                stmt.close();
-                conn.close();
-            } catch (
-                    SQLException ex) {
-                throw new RuntimeException(ex);
-            } catch (Exception e) {
-                //Handle errors for Class.forName
-                e.printStackTrace();
-            } finally {
-                //finally block used to close resources
-                try {
-                    if (stmt != null) stmt.close();
-                } catch (SQLException se2) {
-                } // nothing we can do
-                try {
-                    if (conn != null) conn.close();
-                } catch (SQLException se) {
-                    se.printStackTrace();
-                }
+            } catch (SQLException ex) {
+                throw new RuntimeException("Error while adding data to registration table", ex);
             }
         }
 
         public static void retrieveDataFromRegistrationTable()  {
-            try {
-                //Step 2:  Open a connection to the database
-                conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+            try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+                 Statement stmt = conn.createStatement()) {
 
-                //Step 3 Prepare a SQL query
-                stmt = conn.createStatement();
-                String sql = "SELECT * FROM REGISTRATION";
+                try (ResultSet rs = stmt.executeQuery("SELECT * FROM REGISTRATION")) {
+                    while (rs.next()) {
+                        int id = rs.getInt("id");
+                        String first = rs.getString("first");
+                        String last = rs.getString("last");
+                        int age = rs.getInt("age");
 
-                //Step 4:  Execute the SQL statement
-                ResultSet rs = stmt.executeQuery(sql);
-
-                //Step 5:  Handle the response.
-                while(rs.next()) {
-                    int id = rs.getInt("id");
-                    String first = rs.getString("first");
-                    String last = rs.getString("last");
-                    int age = rs.getInt("age");
-
-                    System.out.print("ID: " + id);
-                    System.out.print(", First: " + first);
-                    System.out.print(", Last: " + last);
-                    System.out.println(", Age: " + age);
+                        System.out.println("ID: " + id + ", First: " + first + ", Last: " +
+                                last + ", Age: " + age);
+                    }
                 }
 
-                //Steps 6 and 7:  Close open things
-                stmt.close();
-                rs.close();
-                conn.close();
-            } catch (
-                    SQLException ex) {
-                throw new RuntimeException(ex);
-            } catch (Exception e) {
-                //Handle errors for Class.forName
-                e.printStackTrace();
-            } finally {
-                //finally block used to close resources
-                try {
-                    if (stmt != null) stmt.close();
-                } catch (SQLException se2) {
-                } // nothing we can do
-                try {
-                    if (conn != null) conn.close();
-                } catch (SQLException se) {
-                    se.printStackTrace();
-                }
+            } catch (SQLException ex) {
+                throw new RuntimeException("Error while retrieving data from registration table", ex);
             }
         }
 
     public static void updateAndRetrieveDataFromRegistration() {
-        try {
-            // STEP 2: Open a connection
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+             Statement stmt = conn.createStatement()) {
 
-            conn = DriverManager.getConnection(DB_URL,USER,PASSWORD);
+            // Update data
+            String updateSql = "UPDATE REGISTRATION SET age = 30 WHERE first='Bill'";
+            stmt.executeUpdate(updateSql);
 
-            // STEP# 3 and 4: Prepare and Execute two queries.  Note that we only need one statement and one sql declaration
-            stmt = conn.createStatement();
-            String sql = "UPDATE Registration " + "SET age = 30 WHERE first='Bill'";
-            stmt.executeUpdate(sql);
+            // Retrieve and display data
+            String selectSql = "SELECT first, last, age FROM REGISTRATION";
+            try (ResultSet rs = stmt.executeQuery(selectSql)) {
+                while (rs.next()) {
+                    String first = rs.getString("first");
+                    String last = rs.getString("last");
+                    int age = rs.getInt("age");
 
-            sql = "SELECT id, first, last, age FROM REGISTRATION";
-
-            ResultSet rs = stmt.executeQuery(sql);
-
-            // STEP 5: Extract data from result set
-            while(rs.next()) {
-                int id  = rs.getInt("id");
-                String first = rs.getString("first");
-                String last = rs.getString("last");
-                int age = rs.getInt("age");
-
-                System.out.print("ID: " + id);
-                System.out.print(", First: " + first);
-                System.out.print(", Last: " + last);
-                System.out.println(", Age: " + age);
+                    System.out.print(", First: " + first);
+                    System.out.print(", Last: " + last);
+                    System.out.println(", Age: " + age);
+                }
             }
 
-            // STEP 6 and 7: Clean-up environment
-            rs.close();
-            stmt.close();
-            conn.close();
-        } catch(SQLException se) {
-            // Handle errors for JDBC
+        } catch (SQLException se) {
             se.printStackTrace();
-        } catch(Exception e) {
-            // Handle errors for Class.forName
-            e.printStackTrace();
-        } finally {
-            // finally block used to close resources
-            try {
-                if(stmt!=null) stmt.close();
-            } catch(SQLException se2) {
-            } // nothing we can do
-            try {
-                if(conn!=null) conn.close();
-            } catch(SQLException se) {
-                se.printStackTrace();
-            }
+            throw new RuntimeException("Error while updating and retrieving data from registration table", se);
         }
     }
 
     public static void retrieveDataFromEmployees()  {
-        try {
-            //Step 2:  Open a connection to the database
-            conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM EMPLOYEES")) {
 
-            //Step 3 Prepare a SQL query
-            stmt = conn.createStatement();
-            String sql = "SELECT * FROM EMPLOYEES";
-
-            //Step 4:  Execute the SQL statement
-            ResultSet rs = stmt.executeQuery(sql);
-
-            //Step 5:  Handle the response.
-            while(rs.next()) {
+            while (rs.next()) {
                 int id = rs.getInt("employee_id");
                 String first_name = rs.getString("first_name");
                 String last_name = rs.getString("last_name");
@@ -249,44 +170,20 @@ public class H2WithJavaApplication {
                 System.out.println(", Company ID: " + company_id);
             }
 
-            //Steps 6 and 7:  Close open things
-            stmt.close();
-            conn.close();
-        } catch (
-                SQLException ex) {
-            throw new RuntimeException(ex);
-        } catch (Exception e) {
-            //Handle errors for Class.forName
-            e.printStackTrace();
-        } finally {
-            //finally block used to close resources
-            try {
-                if (stmt != null) stmt.close();
-            } catch (SQLException se2) {
-            } // nothing we can do
-            try {
-                if (conn != null) conn.close();
-            } catch (SQLException se) {
-                se.printStackTrace();
-            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Error while retrieving data from employees table", ex);
         }
     }
 
     public static void retrieveDataFromEmployeesWithTableJoin()  {
-        try {
-            //Step 2:  Open a connection to the database
-            conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASSWORD);
+             Statement stmt = conn.createStatement()) {
+            ResultSet rs = stmt.executeQuery("""
+                    SELECT E.first_name, E.last_name, E.email, C.company_name
+                    FROM EMPLOYEES E
+                    JOIN COMPANIES C ON C.company_id = E.company_id""");
 
-            //Step 3 Prepare a SQL query
-            stmt = conn.createStatement();
-            String sql = ("SELECT first_name, last_name, email, company_name FROM EMPLOYEES" +
-                    " JOIN COMPANIES ON COMPANIES.company_id = EMPLOYEES.company_id");
-
-            //Step 4:  Execute the SQL statement
-            ResultSet rs = stmt.executeQuery(sql);
-
-            //Step 5:  Handle the response.
-            while(rs.next()) {
+            while (rs.next()) {
                 String first_name = rs.getString("first_name");
                 String last_name = rs.getString("last_name");
                 String email = rs.getString("email");
@@ -298,26 +195,24 @@ public class H2WithJavaApplication {
                 System.out.println(", Company Name: " + company_name);
             }
 
-            //Steps 6 and 7:  Close open things
-            stmt.close();
-            conn.close();
-        } catch (
-                SQLException ex) {
-            throw new RuntimeException(ex);
-        } catch (Exception e) {
-            //Handle errors for Class.forName
-            e.printStackTrace();
-        } finally {
-            //finally block used to close resources
-            try {
-                if (stmt != null) stmt.close();
-            } catch (SQLException se2) {
-            } // nothing we can do
-            try {
-                if (conn != null) conn.close();
-            } catch (SQLException se) {
-                se.printStackTrace();
+        } catch (SQLException ex) {
+            throw new RuntimeException("Error while retrieving data from employees table with table join", ex);
+        }
+    }
+
+    private static void printResultSet(ResultSet rs) throws SQLException {
+        ResultSetMetaData metadata = rs.getMetaData();
+        int columnCount = metadata.getColumnCount();
+        for (int i = 1; i <= columnCount; i++) {
+            System.out.print((metadata.getColumnName(i) + "\t"));
+        }
+        System.out.println();
+        while(rs.next()) {
+            String row = "";
+            for (int i = 1; i <= columnCount; i++) {
+                row += rs.getString(i) + "\t";
             }
+            System.out.println(row);
         }
     }
 }
